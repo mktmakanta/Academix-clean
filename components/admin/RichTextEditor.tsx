@@ -5,7 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import ImageExtension from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Youtube from "@tiptap/extension-youtube";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface RichTextEditorProps {
@@ -15,6 +15,7 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const supabase = createClient();
 
   const editor = useEditor({
@@ -41,17 +42,38 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
 
   const handleImageUpload = useCallback(
     async (file: File) => {
+      if (!editor) return;
+      setIsUploading(true);
+
+      // Show base64 preview instantly while uploading in background
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        editor.chain().focus().setImage({ src: base64 }).run();
+      };
+      reader.readAsDataURL(file);
+
+      // Upload to Supabase then replace base64 with real URL
       const ext = file.name.split(".").pop();
       const fileName = `${Date.now()}-media.${ext}`;
       const { error } = await supabase.storage
         .from("post-media")
         .upload(fileName, file);
+
       if (!error) {
         const imageUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${fileName}`;
-        editor?.chain().focus().setImage({ src: imageUrl }).run();
+        const currentHtml = editor.getHTML();
+        const updatedHtml = currentHtml.replace(
+          /src="data:image\/[^"]+"/,
+          `src="${imageUrl}"`,
+        );
+        editor.commands.setContent(updatedHtml, false);
+        onChange(updatedHtml);
       }
+
+      setIsUploading(false);
     },
-    [editor, supabase],
+    [editor, supabase, onChange],
   );
 
   const addYoutubeVideo = () => {
@@ -212,24 +234,50 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
             />
           </svg>
         </ToolbarButton>
+
+        {/* Image button — spinner while uploading */}
         <ToolbarButton
           onClick={() => fileInputRef.current?.click()}
           title="Insert image"
+          active={isUploading}
         >
-          <svg
-            className="w-3.5 h-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
+          {isUploading ? (
+            <svg
+              className="w-3.5 h-3.5 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          )}
         </ToolbarButton>
+
         <ToolbarButton onClick={addYoutubeVideo} title="Embed YouTube">
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
@@ -242,7 +290,10 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleImageUpload(file);
+            if (file) {
+              handleImageUpload(file);
+              e.target.value = ""; // reset so same file can be re-selected
+            }
           }}
         />
         <Divider />
@@ -287,6 +338,13 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
       <div className="px-6 py-5">
         <EditorContent editor={editor} />
       </div>
+
+      {isUploading && (
+        <div className="px-6 pb-3 text-xs text-gray-400 flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+          Uploading image...
+        </div>
+      )}
     </div>
   );
 }
