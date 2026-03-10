@@ -1,17 +1,17 @@
-import { createClient } from '@/lib/supabase/server';
-import Link from 'next/link';
-import type { Post } from '@/types';
-import { formatDate } from '@/lib/utils';
+import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import type { Post } from "@/types";
+import { formatDate } from "@/lib/utils";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
 
   const { data: posts } = await supabase
-    .from('posts')
-    .select('id, title, slug, created_at, published')
-    .order('created_at', { ascending: false });
+    .from("posts")
+    .select("id, title, slug, created_at, published")
+    .order("created_at", { ascending: false });
 
   const allPosts = (posts as Partial<Post>[]) || [];
   const published = allPosts.filter((p) => p.published);
@@ -36,16 +36,22 @@ export default async function AdminDashboard() {
           className="inline-flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-700 transition-colors"
         >
           <span>+</span>
-          <span>Write a story</span>
+          <span>Create a story</span>
         </Link>
       </div>
 
       {allPosts.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-16 text-center">
-          <p className="text-gray-400 mb-4" style={{ fontFamily: "'Lora', Georgia, serif" }}>
+          <p
+            className="text-gray-400 mb-4"
+            style={{ fontFamily: "'Lora', Georgia, serif" }}
+          >
             You haven&apos;t written anything yet.
           </p>
-          <Link href="/admin/new" className="text-sm text-green-700 hover:underline font-medium">
+          <Link
+            href="/admin/new"
+            className="text-sm text-green-700 hover:underline font-medium"
+          >
             Write your first story →
           </Link>
         </div>
@@ -61,17 +67,21 @@ export default async function AdminDashboard() {
                   <span
                     className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
                       post.published
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-yellow-50 text-yellow-700'
+                        ? "bg-green-50 text-green-700"
+                        : "bg-yellow-50 text-yellow-700"
                     }`}
                   >
-                    {post.published ? 'Published' : 'Draft'}
+                    {post.published ? "Published" : "Draft"}
                   </span>
                   {post.created_at && (
-                    <span className="text-xs text-gray-400">{formatDate(post.created_at)}</span>
+                    <span className="text-xs text-gray-400">
+                      {formatDate(post.created_at)}
+                    </span>
                   )}
                 </div>
-                <p className="font-medium text-gray-900 truncate">{post.title || 'Untitled'}</p>
+                <p className="font-medium text-gray-900 truncate">
+                  {post.title || "Untitled"}
+                </p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 {post.published && (
